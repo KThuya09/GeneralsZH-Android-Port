@@ -1,0 +1,28 @@
+# Dockerfile for reproducible GeneralsX Android Build
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ANDROID_NDK_VERSION=r26d
+ENV ANDROID_NDK_HOME=/opt/android-ndk
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    git curl wget unzip openjdk-17-jdk \
+    ninja-build meson cmake python3 python3-pip build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and extract Android NDK r26d
+RUN wget -q https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip -O /tmp/ndk.zip \
+    && unzip -q /tmp/ndk.zip -d /opt \
+    && mv /opt/android-ndk-${ANDROID_NDK_VERSION} /opt/android-ndk \
+    && rm /tmp/ndk.zip
+
+ENV PATH="${ANDROID_NDK_HOME}:${PATH}"
+
+WORKDIR /workspace
+# Copy repo
+COPY . /workspace
+
+RUN git submodule update --init --recursive references/fbraz3-dxvk
+
+CMD ["./scripts/build/android/build-dual-hz.sh"]
