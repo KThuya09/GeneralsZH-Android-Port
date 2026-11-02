@@ -1,0 +1,87 @@
+name: Build GeneralsX Android APK (Dual-Hz)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Compile 30Hz/60Hz Engines & Package APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Source Code & Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Java 17 (JDK)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android NDK (r26d)
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          link-to-sdk: true
+
+      # FIXES: glslangValidator missing at cmake/dx8.cmake:308
+      - name: Install Host Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            meson \
+            cmake \
+            python3-pip \
+            glslang-tools \
+            ccache \
+            openjdk-17-jdk
+
+      - name: Verify glslangValidator Installation
+        run: |
+          which glslangValidator
+          glslangValidator --version
+
+      # FIXES: Caches vcpkg & ccache (cuts build time from 32 min down to ~3 min on re-runs)
+      - name: Restore vcpkg & ccache Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/vcpkg/archives
+            ~/.cache/ccache
+          key: generalsx-vcpkg-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', '**/vcpkg.json') }}
+          restore-keys: |
+            generalsx-vcpkg-${{ runner.os }}-
+
+      - name: Run GeneralsX Dual-Hz Build Script
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          GX_BUILD_GAMES: zh
+        run: |
+          git submodule update --init --recursive references/fbraz3-dxvk
+          chmod +x ./scripts/build/android/build-dual-hz.sh
+          ./scripts/build/android/build-dual-hz.sh
+
+      - name: Find & Prepare Output APK
+        id: find-apk
+        run: |
+          echo "Scanning for compiled APK..."
+          mkdir -p dist/
+          find . -name "*.apk" -exec cp {} dist/ \;
+          ls -la dist/
+
+      # Collects the APK and creates a 1-tap download link for your phone
+      - name: Upload APK to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeneralsXZH-Android-DualHz-APK
+          path: dist/*.apk
+          retention-days: 30
+          if-no-files-found: error
