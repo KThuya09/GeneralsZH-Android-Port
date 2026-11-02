@@ -1,0 +1,4 @@
+- name: Install Host Build Dependencies (including DXVK shader tools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build meson cmake python3-pip glslang-tools ccache
